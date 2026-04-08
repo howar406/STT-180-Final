@@ -1,0 +1,74 @@
+---
+title: "Data Import"
+author: "Our Group"
+date: "2026-04-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r football}
+library(dplyr)
+cfb13 <- read.csv("College_Football_data/cfb13.csv")
+cfb14 <- read.csv("College_Football_data/cfb14.csv")
+cfb15 <- read.csv("College_Football_data/cfb15.csv")
+cfb16 <- read.csv("College_Football_data/cfb16.csv")
+cfb17 <- read.csv("College_Football_data/cfb17.csv")
+cfb18 <- read.csv("College_Football_data/cfb18.csv")
+cfb19 <- read.csv("College_Football_data/cfb19.csv")
+cfb20 <- read.csv("College_Football_data/cfb20.csv")
+cfb21 <- read.csv("College_Football_data/cfb21.csv")
+cfb22 <- read.csv("College_Football_data/cfb22.csv")
+cfb23 <- read.csv("College_Football_data/cfb23.csv")
+library(purrr)
+cfb_list <- list(
+  "2013" = cfb13,
+  "2014" = cfb14,
+  "2015" = cfb15,
+  "2016" = cfb16,
+  "2017" = cfb17,
+  "2018" = cfb18,
+  "2019" = cfb19,
+  "2020" = cfb20,
+  "2021" = cfb21,
+  "2022" = cfb22,
+  "2023" = cfb23
+)
+cfb_cleaned <- imap(cfb_list, ~ .x %>%
+                      mutate(across(everything(), as.character),
+                             Year = .y))
+cfb_all <- bind_rows(cfb_cleaned)
+champions <- tibble::tribble(
+  ~Year, ~Champion,
+  2013, "Florida St. (ACC)",
+  2014, "Ohio St. (Big Ten)",
+  2015, "Alabama (SEC)",
+  2016, "Clemson (ACC)",
+  2017, "Alabama (SEC)",
+  2018, "Clemson (ACC)",
+  2019, "LSU (SEC)",
+  2020, "Alabama (SEC)",
+  2021, "Georgia (SEC)",
+  2022, "Georgia (SEC)",
+  2023, "Michigan (Big Ten)"
+)
+cfb_all
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
