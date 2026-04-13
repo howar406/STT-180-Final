@@ -9,14 +9,14 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+```{r library}
+library(dplyr)
+library(purrr)
+library(stringr)
+library(tidyr)
+```
 
 ```{r football}
-library(dplyr)
 cfb13 <- read.csv("College_Football_data/cfb13.csv")
 cfb14 <- read.csv("College_Football_data/cfb14.csv")
 cfb15 <- read.csv("College_Football_data/cfb15.csv")
@@ -28,7 +28,6 @@ cfb20 <- read.csv("College_Football_data/cfb20.csv")
 cfb21 <- read.csv("College_Football_data/cfb21.csv")
 cfb22 <- read.csv("College_Football_data/cfb22.csv")
 cfb23 <- read.csv("College_Football_data/cfb23.csv")
-library(purrr)
 cfb_list <- list(
   "2013" = cfb13,
   "2014" = cfb14,
@@ -42,10 +41,36 @@ cfb_list <- list(
   "2022" = cfb22,
   "2023" = cfb23
 )
+
+
+# Combine datasets
 cfb_cleaned <- imap(cfb_list, ~ .x %>%
-                      mutate(across(everything(), as.character),
-                             Year = .y))
+  mutate(across(everything(), as.character),
+         Year = as.numeric(.y)))
+
 cfb_all <- bind_rows(cfb_cleaned)
+
+
+# Clean strings
+cfb_all <- cfb_all %>%
+  mutate(across(everything(), ~str_trim(.))) %>%
+  mutate(across(everything(), ~str_replace_all(., "Â", ""))) %>%
+  mutate(across(everything(), ~na_if(., ""))) %>%
+  mutate(across(everything(), ~na_if(., "NA")))
+cfb_all <- cfb_all %>%
+  filter(Average.Time.of.Possession.per.Game != "Reclassifying")
+
+
+# Convert time
+cfb_all <- cfb_all %>%
+  separate(Average.Time.of.Possession.per.Game,
+           into = c("min", "sec"),
+           sep = ":",
+           convert = TRUE)
+cfb_all <- cfb_all %>%
+  mutate(avg_top_min = min + sec / 60)
+
+
 champions <- tibble::tribble(
   ~Year, ~Champion,
   2013, "Florida St. (ACC)",
@@ -60,9 +85,35 @@ champions <- tibble::tribble(
   2022, "Georgia (SEC)",
   2023, "Michigan (Big Ten)"
 )
+
 cfb_all
 ```
 
+```{r model}
+cfb_model <- cfb_all %>%
+  mutate(
+    win_pct = as.numeric(Win) / as.numeric(Games),
+    third_down_pct = as.numeric(X3rd.Percent),
+    fourth_down_pct = as.numeric(X4th.Percent),
+    pass_td = as.numeric(Pass.Touchdowns),
+    rush_td = as.numeric(Rushing.TD),
+    fg = as.numeric(Feild.Goals), # the dataset spelled feild wrong not me
+    turnovers = as.numeric(Turnover.Margin)
+  ) %>%
+  select(win_pct, third_down_pct, fourth_down_pct,
+         pass_td, rush_td, fg,
+         avg_top_min, turnovers) %>%
+  na.omit()
+
+cfb_model
+
+model_full <- lm(win_pct ~ third_down_pct + fourth_down_pct +
+                  pass_td + rush_td + fg +
+                  avg_top_min + turnovers,
+                data = cfb_model)
+
+summary(model_full)
+```
 ## Including Plots
 
 You can also embed plots, for example:
