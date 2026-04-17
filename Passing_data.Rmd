@@ -1,0 +1,152 @@
+---
+title: "Data Import"
+author: "Group #2"
+date: "2026-04-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r library}
+library(dplyr)
+library(purrr)
+library(stringr)
+library(tidyr)
+library(ggplot2)
+library(readr)
+```
+
+```{r football}
+cfb13 <- read.csv("cfb13.csv")
+cfb14 <- read.csv("cfb14.csv")
+cfb15 <- read.csv("cfb15.csv")
+cfb16 <- read.csv("cfb16.csv")
+cfb17 <- read.csv("cfb17.csv")
+cfb18 <- read.csv("cfb18.csv")
+cfb19 <- read.csv("cfb19.csv")
+cfb20 <- read.csv("cfb20.csv")
+cfb21 <- read.csv("cfb21.csv")
+cfb22 <- read.csv("cfb22.csv")
+cfb23 <- read.csv("cfb23.csv")
+cfb_list <- list("2013" = cfb13,
+  "2014" = cfb14,
+  "2015" = cfb15,
+  "2016" = cfb16,
+  "2017" = cfb17,
+  "2018" = cfb18,
+  "2019" = cfb19,
+  "2020" = cfb20,
+  "2021" = cfb21,
+  "2022" = cfb22,
+  "2023" = cfb23
+)
+
+
+# Combine datasets
+cfb_cleaned <- imap(cfb_list, ~ .x %>%
+  mutate(across(everything(), as.character),
+         Year = as.numeric(.y)))
+
+cfb_all <- bind_rows(cfb_cleaned)
+
+
+# Clean strings
+cfb_all <- cfb_all %>%
+  mutate(across(everything(), ~str_trim(.))) %>%
+  mutate(across(everything(), ~str_replace_all(., "Â", ""))) %>%
+  mutate(across(everything(), ~na_if(., ""))) %>%
+  mutate(across(everything(), ~na_if(., "NA")))
+cfb_all <- cfb_all %>%
+  filter(Average.Time.of.Possession.per.Game != "Reclassifying")
+
+
+# Convert time
+cfb_all <- cfb_all %>%
+  separate(Average.Time.of.Possession.per.Game,
+           into = c("min", "sec"),
+           sep = ":",
+           convert = TRUE)
+cfb_all <- cfb_all %>%
+  mutate(avg_top_min = min + sec / 60)
+
+
+champions <- tibble::tribble(
+  ~Year, ~Champion,
+  2013, "Florida St. (ACC)",
+  2014, "Ohio St. (Big Ten)",
+  2015, "Alabama (SEC)",
+  2016, "Clemson (ACC)",
+  2017, "Alabama (SEC)",
+  2018, "Clemson (ACC)",
+  2019, "LSU (SEC)",
+  2020, "Alabama (SEC)",
+  2021, "Georgia (SEC)",
+  2022, "Georgia (SEC)",
+  2023, "Michigan (Big Ten)"
+)
+
+cfb_all
+```
+
+```{r model}
+cfb_passing <- cfb_all %>%
+  mutate(
+    pass_att = as.numeric(Pass.Attempts),
+    pass_comp = as.numeric(Pass.Completions),
+    pass_yds = parse_number(Pass.Yards),
+    games = as.numeric(Games),
+    wins = as.numeric(Win)
+  ) %>%
+  mutate(
+    yards_per_attempt = pass_yds / pass_att,
+    completion_pct = pass_comp / pass_att,
+    pass_yards_per_game = pass_yds / games
+  ) %>%
+  select(Team, Year, wins,
+         yards_per_attempt,
+         completion_pct,
+         pass_yards_per_game) %>%
+  na.omit()
+```
+
+```{r}
+cfb_passing %>%
+  group_by(wins) %>%
+  summarise(avg_ypa = mean(yards_per_attempt, na.rm = TRUE)) %>%
+  ggplot(aes(x = wins, y = avg_ypa)) +
+  geom_point(size = 3, color = "blue") +
+  geom_line(color = "blue") +
+  labs(
+    title = "Yards per Attempt vs Wins",
+    x = "Wins",
+    y = "Average Yards per Attempt"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+ggplot(cfb_passing, aes(x = completion_pct)) +
+  geom_histogram(color = "black", fill = "darkgreen", bins = 20) +
+  labs(
+    title = "Completion % Distribution by Wins",
+    x = "Completion Percentage",
+    y = "Count of Teams"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+cfb_passing %>%
+  group_by(wins) %>%
+  summarise(avg_pass_ypg = mean(pass_yards_per_game, na.rm = TRUE)) %>%
+  ggplot(aes(x = factor(wins), y = avg_pass_ypg)) +
+  geom_col(color = "black", fill = "purple") +
+  labs(
+    title = "Passing Yards per Game vs Wins",
+    x = "Wins",
+    y = "Average Passing Yards per Game"
+  ) +
+  theme_minimal()
+```
