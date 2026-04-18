@@ -94,24 +94,15 @@ cfb_all
 cfb_model <- cfb_all %>%
   mutate(
     win_pct = as.numeric(Win) / as.numeric(Games),
-    third_down_pct = as.numeric(X3rd.Percent),
-    fourth_down_pct = as.numeric(X4th.Percent),
-    pass_td = as.numeric(Pass.Touchdowns),
-    rush_td = as.numeric(Rushing.TD),
-    fg = as.numeric(Feild.Goals),
     turnovers_lost = as.numeric(Turnovers.Lost),
     turnovers_gain = as.numeric(Turnovers.Gain)
   ) %>%
-  select(win_pct, third_down_pct, fourth_down_pct,
-         pass_td, rush_td, fg,
-         avg_top_min, turnovers_lost, turnovers_gain) %>%
+  select(win_pct, turnovers_lost, turnovers_gain) %>%
   na.omit()
 
 cfb_model
 
-model_turnovers <- lm(win_pct ~ third_down_pct + fourth_down_pct +
-                       pass_td + rush_td + fg +
-                       avg_top_min + turnovers_lost + turnovers_gain,
+model_turnovers <- lm(win_pct ~ turnovers_lost + turnovers_gain,
                      data = cfb_model)
 
 summary(model_turnovers)
