@@ -1,0 +1,148 @@
+---
+title: "Data Import"
+author: "Group #2"
+date: "2026-04-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r library}
+library(dplyr)
+library(purrr)
+library(stringr)
+library(tidyr)
+library(ggplot2)
+library(readr)
+```
+
+```{r football}
+cfb13 <- read.csv("cfb13.csv")
+cfb14 <- read.csv("cfb14.csv")
+cfb15 <- read.csv("cfb15.csv")
+cfb16 <- read.csv("cfb16.csv")
+cfb17 <- read.csv("cfb17.csv")
+cfb18 <- read.csv("cfb18.csv")
+cfb19 <- read.csv("cfb19.csv")
+cfb20 <- read.csv("cfb20.csv")
+cfb21 <- read.csv("cfb21.csv")
+cfb22 <- read.csv("cfb22.csv")
+cfb23 <- read.csv("cfb23.csv")
+cfb_list <- list("2013" = cfb13,
+  "2014" = cfb14,
+  "2015" = cfb15,
+  "2016" = cfb16,
+  "2017" = cfb17,
+  "2018" = cfb18,
+  "2019" = cfb19,
+  "2020" = cfb20,
+  "2021" = cfb21,
+  "2022" = cfb22,
+  "2023" = cfb23
+)
+
+
+# Combine datasets
+cfb_cleaned <- imap(cfb_list, ~ .x %>%
+  mutate(across(everything(), as.character),
+         Year = as.numeric(.y)))
+
+cfb_all <- bind_rows(cfb_cleaned)
+
+
+# Clean strings
+cfb_all <- cfb_all %>%
+  mutate(across(everything(), ~str_trim(.))) %>%
+  mutate(across(everything(), ~str_replace_all(., "Â", ""))) %>%
+  mutate(across(everything(), ~na_if(., ""))) %>%
+  mutate(across(everything(), ~na_if(., "NA")))
+cfb_all <- cfb_all %>%
+  filter(Average.Time.of.Possession.per.Game != "Reclassifying")
+
+
+# Convert time
+cfb_all <- cfb_all %>%
+  separate(Average.Time.of.Possession.per.Game,
+           into = c("min", "sec"),
+           sep = ":",
+           convert = TRUE)
+cfb_all <- cfb_all %>%
+  mutate(avg_top_min = min + sec / 60)
+
+
+champions <- tibble::tribble(
+  ~Year, ~Champion,
+  2013, "Florida St. (ACC)",
+  2014, "Ohio St. (Big Ten)",
+  2015, "Alabama (SEC)",
+  2016, "Clemson (ACC)",
+  2017, "Alabama (SEC)",
+  2018, "Clemson (ACC)",
+  2019, "LSU (SEC)",
+  2020, "Alabama (SEC)",
+  2021, "Georgia (SEC)",
+  2022, "Georgia (SEC)",
+  2023, "Michigan (Big Ten)"
+)
+
+cfb_all
+```
+
+```{r model}
+cfb_situational <- cfb_all %>%
+  mutate(
+    wins = as.numeric(Win),
+    games = as.numeric(Games),
+
+    third_down_pct = as.numeric(X3rd.Percent),
+    fourth_down_pct = as.numeric(X4th.Percent),
+
+    redzone_attempts = as.numeric(Redzone.Attempts),
+    redzone_scores = as.numeric(Redzone.Scores),
+    redzone_eff = ifelse(redzone_attempts > 0,
+                         redzone_scores / redzone_attempts,
+                         NA),
+
+    kick_return_avg = as.numeric(Avg.Yard.per.Kickoff.Return)
+  ) %>%
+  select(Team, Year, wins,
+         third_down_pct,
+         fourth_down_pct,
+         redzone_eff,
+         kick_return_avg) %>%
+  na.omit()
+```
+
+```{r}
+cfb_situational %>%
+  group_by(wins) %>%
+  summarise(avg_3rd = mean(third_down_pct, na.rm = TRUE)) %>%
+  ggplot(aes(x = wins, y = avg_3rd)) +
+  geom_point(size = 3, color = "blue") +
+  geom_line(color = "blue") +
+  labs(
+    title = "3rd Down % vs Wins",
+    x = "Wins",
+    y = "Average 3rd Down %"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+cfb_situational %>%
+  group_by(wins) %>%
+  summarise(avg_redzone = mean(redzone_eff, na.rm = TRUE)) %>%
+  ggplot(aes(x = wins, y = avg_redzone)) +
+  geom_point(size = 3, color = "darkgreen") +
+  geom_line(color = "darkgreen") +
+  labs(
+    title = "Red Zone Efficiency vs Wins",
+    x = "Wins",
+    y = "Average Red Zone Efficiency"
+  ) +
+  theme_minimal()
+```
+
+

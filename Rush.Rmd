@@ -1,0 +1,216 @@
+---
+title: 'Rush Game'
+author: "Our Group"
+date: "2026-04-14"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r rush}
+cfb_all <- read.csv("cfb_all.csv")
+library(dplyr)
+champions <- read.csv("champions.csv")
+cfb_rush <- cfb_all %>%
+  select(First.Down.Runs, Rushing.Off.Rank, Rush.Attempts, Rush.Yds, Rushing.TD, Rushing.Yards.per.Game, Rushing.Def.Rank, Rush.Yards.Per.Game.Allowed)
+cfb_rush
+cfb_all
+champions
+champions_clean <- champions %>%
+  mutate(
+    Team = str_remove(Champion, "\\s*\\(.*\\)")
+  ) %>%
+  select(Year, Team)
+```
+
+```{r rush_comp}
+library(stringr)
+
+cfb_all_net <- cfb_all %>%
+  mutate(
+    Conference = str_extract(Team, "\\(.*\\)"),
+    Conference = str_remove_all(Conference, "[()]"),
+    Team = str_remove(Team, "\\s*\\(.*\\)"),
+    net.rush.ypg = Rushing.Yards.per.Game - Rush.Yards.Per.Game.Allowed
+  )
+
+cfb_all_net
+wins_summary <- cfb_all_net %>%
+  group_by(Win) %>%
+  summarise(
+    avg.net.rush.ypg = mean(net.rush.ypg, na.rm = TRUE),
+    n_teams = n(),
+    .groups = "drop"
+  )
+wins_conf_summary <- cfb_all_net %>%
+  group_by(Conference, Win) %>%
+  summarise(
+    avg.net.rush.ypg = mean(net.rush.ypg, na.rm = TRUE),
+    n_teams = n(),
+    .groups = "drop"
+  )
+library(dplyr)
+library(stringr)
+
+wins_conf_summary <- wins_conf_summary %>%
+  mutate(
+    Conference = case_when(
+      Conference %in% c("C-USA", "CUSA") ~ "Conference USA",
+      Conference %in% c("MAC", "OH MAC") ~ "MAC",
+      Conference %in% c("MWC", "Mountain West") ~ "Mountain West",
+      Conference %in% c("Independent", "FBS Independent", "") ~ "Independent",
+      Conference %in% c("ACC", "FL ACC", "AAC") ~ "ACC",
+      TRUE ~ Conference
+    )
+  )
+wins_conf_summary
+```
+
+```{r rush_plot}
+ggplot(
+  wins_conf_summary,
+  aes(x = Win, y = avg.net.rush.ypg, color = Conference)
+) +
+  annotate("rect",
+           xmin = -Inf, xmax = Inf,
+           ymin = -Inf, ymax = 0,
+           fill = "red", alpha = 0.08) +
+  annotate("rect",
+           xmin = -Inf, xmax = Inf,
+           ymin = 0, ymax = Inf,
+           fill = "green", alpha = 0.08) +
+  geom_point(alpha = 0.6, size = 2) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  scale_color_manual(
+    values = c(
+      "ACC" = "#D55E00",
+      "Big 12" = "#E69F00",
+      "Big Ten" = "#009E73",
+      "Conference USA" = "#56B4E9",
+      "Independent" = "#000000",
+      "MAC" = "#0072B2",
+      "Mountain West" = "#CC79A7",
+      "Pac-12" = "#F0E442",
+      "SEC" = "#7F7F7F",
+      "Sun Belt" = "#A6761D"
+    )
+  ) +
+  labs(
+    title = "Wins vs Net Rushing Yards per Game",
+    subtitle = "Green = positive rushing margin | Red = negative rushing margin",
+    x = "Wins",
+    y = "Average Net Rushing Yards per Game",
+    color = "Conference"
+  ) +
+  theme_minimal()
+```
+
+```{r champs_rush}
+library(dplyr)
+library(stringr)
+library(ggplot2)
+team_main_colors <- c(
+  "Alabama"      = "#9E1B32",  # Crimson
+  "Clemson"      = "#F56600",  # Orange
+  "Georgia"      = "#BA0C2F",  # Red
+  "LSU"          = "#461D7C",  # Purple
+  "Ohio St."     = "#BB0000",  # Scarlet
+  "Florida St."  = "#782F40"   # Garnet
+)
+
+team_secondary_colors <- c(
+  "Alabama"      = "#828A8F",  # Silver
+  "Clemson"      = "#522D80",  # Purple
+  "Georgia"      = "#000000",  # Black
+  "LSU"          = "#FDD023",  # Gold
+  "Ohio St."     = "#FFFFFF",  # White
+  "Florida St."  = "#CEB888"   # Gold
+)
+champions_clean <- champions %>%
+  mutate(
+    Team = str_remove(Champion, "\\s*\\(.*\\)")
+  ) %>%
+  select(Year, Team)
+champ_keys <- paste(champions_clean$Year, champions_clean$Team)
+cfb_champ_compare <- cfb_all_net %>%
+  mutate(
+    season_key = paste(Year, Team),
+    is_champion = season_key %in% champ_keys
+  ) %>%
+  filter(Team %in% champions_clean$Team)
+ggplot(
+  cfb_champ_compare,
+  aes(x = Year, y = net.rush.ypg, group = Team)
+) +
+  # Connecting lines (MAIN team color)
+  geom_line(
+    aes(color = Team),
+    linewidth = 1.1
+  ) +
+
+  # Non-championship points (SECONDARY team color)
+  geom_point(
+    data = subset(cfb_champ_compare, !is_champion),
+    aes(fill = Team),
+    color = "black",
+    shape = 21,
+    size = 2.8,
+    alpha = 0.85,
+    stroke = 0.4
+  ) +
+
+  # Championship seasons = GOLD STARS
+  geom_point(
+    data = subset(cfb_champ_compare, is_champion),
+    shape = 8,
+    color = "gold",
+    size = 4.5,
+    stroke = 1.2
+  ) +
+
+  # Zero reference line
+  geom_hline(
+    yintercept = 0,
+    linetype = "dashed",
+    color = "gray50"
+  ) +
+
+  # Color scales
+  scale_color_manual(values = team_main_colors) +
+  scale_fill_manual(values = team_secondary_colors) +
+
+  labs(
+    title = "Rushing Performance of National Champions Over Time",
+    subtitle = "Lines = team primary color | Points = secondary color | Gold stars = championship seasons",
+    x = "Season",
+    y = "Net Rushing Yards per Game",
+    color = "Team",
+    fill = "Team"
+  ) +
+  scale_x_continuous(
+  breaks = seq(
+    min(cfb_champ_compare$Year),
+    max(cfb_champ_compare$Year),
+    by = 1
+  )
+  ) +
+
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold"),
+    legend.position = "right"
+  )
+
+
+```
+
